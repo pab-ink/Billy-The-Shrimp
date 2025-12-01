@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billy the shrimp</title>
+    <style>
+        @font-face {
+            font-family: 'Peralta';
+            src: url('font/peralta/peralta-regular.ttf') format('truetype');
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+            font-family: 'Peralta', 'Arial', sans-serif;
+            overflow: hidden;
+            color: white;
+            user-select: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+            border: 4px solid #005f99;
+            
+        }
+        
+        canvas {
+            display: block;
+            background: transparent;
+            width: 800px;
+            height: 500px;
+        }
+        
+        #titleScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            text-align: center;
+            overflow: hidden;
+        }
+        
+        #posterContainer {
+            position: relative;
+            width: 326px;
+            height: 450px;
+            transform-origin: center;
+            margin-top: -40px;
+            
+        }
+        
+        #poster {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        #storyText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 70%;
+            font-size: 15px;
+            line-height: 1.4;
+            /*text-shadow: 1px 1px 2px rgb(0, 0, 0);*/
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+            color: #352800;
+        }
+        
+        #startPrompt {
+            position: absolute;
+            bottom: 50px;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            animation: blink 1.5s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    
+    <div id="titleScreen">
+        <div id="posterContainer">
+            <img id="poster" src="img/background/poster.png" alt="Poster">
+            <div id="storyText">
+                Created by pabink.<br>
+                Art by pabink.<br>
+                Coding by pabink, Deepseek, Claude, ChatGPT.<br>
+                Music by pabink, Suno.com.<br>
+                Sound Effect by pabink, soundeffectgenerator.org.<br>
+                Font Peralta by Brian J. Bonislawsky.
+
+            </div>
+        </div>
+        <p id="startPrompt">Press Enter to Continue</p>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const titleScreen = document.getElementById('titleScreen');
+
+    let gameActive = false;
+    let frames = 0;
+
+    // Caricamento immagini
+    const playerFrames = {
+        right: [],
+        left: []
+    };
+    
+    const backgroundImage = new Image();
+    backgroundImage.src = 'img/background/village.png';
+    
+    const bubbleSprite = new Image();
+    bubbleSprite.src = 'img/bubbles/bubble_1.png';
+    
+    // Variabili per l'animazione del player
+    let currentFrame = 0;
+    let isCharging = false;
+    let isShooting = false;
+    let animationTimer = 0;
+    const ANIMATION_SPEED = 3;
+    
+    let totalImagesToLoad = 2;
+    let imagesLoaded = 0;
+    
+    function imageLoaded() {
+        imagesLoaded++;
+        if (imagesLoaded === totalImagesToLoad) {
+            update();
+        }
+    }
+    
+    function imageError(src) {
+        console.error('Errore caricamento:', src);
+        imagesLoaded++;
+        if (imagesLoaded === totalImagesToLoad) {
+            update();
+        }
+    }
+    
+    // Carica i frame del player
+    function loadPlayerFrames() {
+        const frameCount = 3;
+        
+        for (let i = 1; i <= frameCount; i++) {
+            const rightFrame = new Image();
+            rightFrame.src = `img/player_frames/billy_right_${i}.png`;
+            rightFrame.onload = imageLoaded;
+            rightFrame.onerror = () => imageError(`billy_right_${i}.png`);
+            playerFrames.right.push(rightFrame);
+            
+            const leftFrame = new Image();
+            leftFrame.src = `img/player_frames/billy_left_${i}.png`;
+            leftFrame.onload = imageLoaded;
+            leftFrame.onerror = () => imageError(`billy_left_${i}.png`);
+            playerFrames.left.push(leftFrame);
+            
+            totalImagesToLoad += 2;
+        }
+    }
+    
+    // Inizia il caricamento
+    backgroundImage.onload = imageLoaded;
+    backgroundImage.onerror = () => imageError('village.png');
+    bubbleSprite.onload = imageLoaded;
+    bubbleSprite.onerror = () => imageError('bubble_1.png');
+    
+    loadPlayerFrames();
+
+    const player = {
+        x: canvas.width / 2 - 40,
+        y: canvas.height / 2 - 40,
+        width: 120,
+        height: 120,
+        speed: 2,
+        angle: 0,
+        vx: 0,
+        vy: 0,
+        friction: 0.95,
+        facingRight: true,
+        moveDirection: 0,
+        directionChangeTimer: 0,
+        shootTimer: 0,
+        chargeTimer: 0
+    };
+
+    let bullets = [];
+    let bubbles = [];
+
+    // Gestione tasto Enter
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            window.location.href = 'index.html';
+        }
+    });
+
+    function updateAnimation() {
+        animationTimer++;
+        
+        if (isCharging && animationTimer >= ANIMATION_SPEED) {
+            // Animazione di caricamento (0 -> 1 -> 2)
+            if (currentFrame < 2) {
+                currentFrame++;
+            }
+            animationTimer = 0;
+        } else if (isShooting && animationTimer >= ANIMATION_SPEED) {
+            // Animazione di sparo (2 -> 1 -> 0)
+            if (currentFrame > 0) {
+                currentFrame--;
+            } else {
+                // Fine animazione di sparo
+                isShooting = false;
+            }
+            animationTimer = 0;
+        }
+    }
+
+    function getCurrentPlayerFrame() {
+        const frames = player.facingRight ? playerFrames.right : playerFrames.left;
+        return frames[currentFrame] || frames[0];
+    }
+
+    function startCharging() {
+        if (isShooting) return;
+        isCharging = true;
+        currentFrame = 0;
+        animationTimer = 0;
+    }
+
+    function shoot() {
+        if (!gameActive || isShooting) return;
+        
+        isCharging = false;
+        isShooting = true;
+        currentFrame = 2;
+        animationTimer = 0;
+
+        const bulletSpeed = 10;
+        const startOffset = player.width / 2 + 15;
+        const bulletX = player.x + player.width / 2 + startOffset * Math.cos(player.angle);
+        const bulletY = player.y + player.height / 2 + startOffset * Math.sin(player.angle);
+
+        bullets.push({
+            x: bulletX,
+            y: bulletY,
+            size: 20, // Ingrandita la bolla proiettile
+            speedX: bulletSpeed * Math.cos(player.angle),
+            speedY: bulletSpeed * Math.sin(player.angle),
+            growth: 0.5 // Aumentata la crescita
+        });
+
+        const recoilForce = 6; 
+        player.vx -= recoilForce * Math.cos(player.angle);
+        player.vy -= recoilForce * Math.sin(player.angle);
+    }
+
+    function update() {
+        if (!gameActive) {
+            requestAnimationFrame(update);
+            return;
+        }
+
+        // Aggiorna animazione
+        updateAnimation();
+
+        // Movimento casuale del player
+        player.directionChangeTimer--;
+        if (player.directionChangeTimer <= 0) {
+            player.moveDirection = Math.random() * Math.PI * 2;
+            player.directionChangeTimer = 60 + Math.random() * 60;
+        }
+        
+        player.vx += Math.cos(player.moveDirection) * player.speed * 0.1;
+        player.vy += Math.sin(player.moveDirection) * player.speed * 0.1;
+
+        // Limita la velocità massima
+        const speed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+        if (speed > player.speed) {
+            player.vx = (player.vx / speed) * player.speed;
+            player.vy = (player.vy / speed) * player.speed;
+        }
+
+        player.x += player.vx;
+        player.y += player.vy;
+        player.vx *= player.friction;
+        player.vy *= player.friction;
+
+        // Aggiorna l'angolo in base alla direzione di movimento
+        if (Math.abs(player.vx) > 0.1 || Math.abs(player.vy) > 0.1) {
+            player.angle = Math.atan2(player.vy, player.vx);
+            player.facingRight = player.vx >= 0;
+        }
+
+        // Rimbalzo sui bordi
+        if (player.x < 0) { player.x = 0; player.vx = -player.vx * 0.5; }
+        if (player.y < 0) { player.y = 0; player.vy = -player.vy * 0.5; }
+        if (player.x > canvas.width - player.width) { 
+            player.x = canvas.width - player.width; 
+            player.vx = -player.vx * 0.5; 
+        }
+        if (player.y > canvas.height - player.height) { 
+            player.y = canvas.height - player.height; 
+            player.vy = -player.vy * 0.5; 
+        }
+
+        // Logica di sparo automatico con caricamento
+        player.shootTimer--;
+        player.chargeTimer--;
+
+        if (player.shootTimer <= 0 && !isCharging && !isShooting) {
+            // Inizia il caricamento
+            startCharging();
+            player.chargeTimer = 30; // Carica per 0.5 secondi
+            player.shootTimer = 120 + Math.random() * 120; // Prossimo sparo tra 2-4 secondi
+        }
+
+        if (player.chargeTimer <= 0 && isCharging) {
+            // Fine caricamento, spara
+            shoot();
+        }
+
+        // Aggiorna proiettili
+        bullets.forEach((bullet, index) => {
+            bullet.x += bullet.speedX;
+            bullet.y += bullet.speedY;
+            bullet.size += bullet.growth;
+            if (bullet.x < -100 || bullet.x > canvas.width + 100 || bullet.y < -100 || bullet.y > canvas.height + 100) {
+                bullets.splice(index, 1);
+            }
+        });
+
+        // Aggiorna bolle
+        bubbles.forEach((bubble, index) => {
+            bubble.y -= bubble.speed;
+            bubble.life -= 0.02;
+            if (bubble.life <= 0) bubbles.splice(index, 1);
+        });
+
+        frames++;
+        requestAnimationFrame(draw);
+    }
+
+    function createExplosion(x, y) {
+        for (let i = 0; i < 5; i++) {
+            bubbles.push({
+                x: x + Math.random() * 20,
+                y: y + Math.random() * 20,
+                size: 10 + Math.random() * 10,
+                speed: Math.random() * 2,
+                life: 1
+            });
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Disegna il background
+        ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+        ctx.rotate(player.angle);
+
+        const currentImage = getCurrentPlayerFrame();
+        ctx.drawImage(currentImage, -player.width / 2, -player.height / 2, player.width, player.height);
+        
+        ctx.restore();
+        
+        // Disegna i proiettili (bolle ingrandite)
+        bullets.forEach(bullet => {
+            ctx.drawImage(bubbleSprite, bullet.x - bullet.size/2, bullet.y - bullet.size/2, bullet.size, bullet.size);
+        });
+
+        // Disegna le bolle
+        bubbles.forEach(bubble => {
+            ctx.globalAlpha = bubble.life;
+            ctx.drawImage(bubbleSprite, bubble.x, bubble.y, bubble.size, bubble.size);
+            ctx.globalAlpha = 1;
+        });
+
+        requestAnimationFrame(update);
+    }
+
+    // Avvia l'animazione del menu
+    gameActive = true;
+    update();
+</script>
+
+</body>
+</html>

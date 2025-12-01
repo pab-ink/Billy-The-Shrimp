@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billy the shrimp</title>
+    <style>
+        @font-face {
+            font-family: 'Peralta';
+            src: url('font/peralta/peralta-regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+            font-family: 'peralta';
+            overflow: hidden;
+            color: white;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+            border: 4px solid #005f99;
+        }
+        canvas {
+            display: block;
+            background: transparent;
+            cursor: crosshair;
+        }
+        #gameContainer:hover {
+            cursor: default;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+        }
+        #musicToggle {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid white;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #musicToggle:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        #startOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #startOverlay.hidden {
+            display: none;
+        }
+
+        #bossImage {
+            max-width: 300px;
+            max-height: 300px;
+            margin-bottom: 30px;
+            border: 3px solid #00ffff;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+        }
+
+        #startText {
+            font-size: 18px;
+            font-family: 'Peralta', 'Arial', sans-serif; 
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Aggiungi questi stili per gli overlay di vittoria/sconfitta */
+        #gameOverOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        
+        #gameOverMessage {
+            font-size: 15px;
+            font-family: 'Peralta', 'Arial', sans-serif;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        
+        #gameOverMessage.win {
+            color: #00ff00;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+        }
+        
+        #gameOverMessage.lose {
+            color: #ff3333;
+            border: 3px solid #ff3333;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+        }
+        
+        #continueText {
+            font-size: 15px;
+            font-family: 'Peralta', 'Arial', sans-serif;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            margin-top: 20px;
+            animation: pulse 2s infinite;
+            padding: 15px 30px;
+            border: 2px solid #00ffff;
+            border-radius: 5px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <div id="ui">
+        Billy the Shrimp - Bounty Killer Snapper
+    </div>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    
+    <div id="startOverlay">
+        <img id="bossImage" src="img/boss_frames/bounty_R_1.png" alt="Boss">
+        <div id="startText">Bounty Killer Snapper reached. Press ENTER to start duel</div>
+    </div>
+    
+    <!-- Aggiungi questo overlay per vittoria/sconfitta -->
+    <div id="gameOverOverlay">
+        <div id="gameOverMessage"></div>
+        <div id="continueText">Press ENTER to continue</div>
+    </div>
+    
+    <button id="musicToggle" onclick="toggleMusic()">🔇 Musica</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const musicToggle = document.getElementById('musicToggle');
+    const startOverlay = document.getElementById('startOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const gameOverMessage = document.getElementById('gameOverMessage');
+    const continueText = document.getElementById('continueText');
+    
+    let gameStarted = false;
+    let gameActive = false; // Cambia da true a false
+ 
+    let frames = 0;
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Enter' && !gameStarted) {
+            gameStarted = true;
+            gameActive = true;
+            startOverlay.classList.add('hidden');
+            startBackgroundMusic();
+            update()
+        }
+        
+        // Gestione dell'input per l'overlay di fine gioco
+        if (e.code === 'Enter' && gameOverOverlay.style.display === 'flex') {
+            if (gameOverMessage.classList.contains('win')) {
+                nextLevel();
+            } else {
+                location.reload();
+            }
+        }
+        
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+    });
+
+    // Tema musicale di sottofondo
+    const backgroundMusic = new Audio('sound/main_theme.mp3');
+    backgroundMusic.loop = true;
+    backgroundMusic.volume = 0.5;
+    let musicPlaying = false;
+
+    // Caricamento immagini
+    const playerFrames = {
+        right: [],
+        left: []
+    };
+
+    const bossFrames = {
+        right: [],
+        left: []
+    };
+    
+    // Aggiungi l'immagine di background
+    const backgroundImage = new Image();
+    backgroundImage.src = 'img/background/seabed.png';
+    
+    // Aggiungi l'immagine della bolla
+    const bubbleSprite = new Image();
+    bubbleSprite.src = 'img/bubbles/bubble_1.png';
+    
+    // Effetto sonoro dello sparo
+    const gunshotSound = new Audio('sound/gunshot.mp3');
+    // Effetto sono caricamento
+    const cockingSound = new Audio('sound/cocking.mp3');
+    // Variabili per l'animazione del player
+    let currentFrame = 0;
+    let isCharging = false;
+    let isShooting = false;
+    let animationTimer = 0;
+    const ANIMATION_SPEED = 1; // Velocità dell'animazione (frame del gioco per frame di animazione)
+    
+    let totalImagesToLoad = 2; // Background + bubble
+    let imagesLoaded = 0;
+    
+    function imageLoaded() {
+        imagesLoaded++;
+        console.log('Immagini caricate:', imagesLoaded, '/', totalImagesToLoad);
+        if (imagesLoaded === totalImagesToLoad) {
+            console.log('Tutte le immagini caricate, avvio gioco!');
+            playCockingSound();
+            //startBackgroundMusic(); // Avvia la musica quando tutto è caricato
+            //update();
+        }
+    }
+    
+    function imageError(src) {
+        console.error('Errore caricamento:', src);
+        imagesLoaded++;
+        if (imagesLoaded === totalImagesToLoad) {
+            update();
+        }
+    }
+    
+    // Funzione per gestire la musica di sottofondo
+    function startBackgroundMusic() {
+        if (!musicPlaying) {
+            backgroundMusic.play().catch(error => {
+                console.log('Errore nella riproduzione della musica:', error);
+                musicToggle.textContent = "🔇 Clicca per musica";
+            });
+            musicPlaying = true;
+            musicToggle.textContent = "🔊 Musica";
+        }
+    }
+    
+    function stopBackgroundMusic() {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0;
+        musicPlaying = false;
+        musicToggle.textContent = "🔇 Musica";
+    }
+    
+    function toggleMusic() {
+        if (musicPlaying) {
+            stopBackgroundMusic();
+        } else {
+            startBackgroundMusic();
+        }
+    }
+    
+    // Carica i frame del player
+    function loadPlayerFrames() {
+        const frameCount = 3; // billy_right_1.png, billy_right_2.png, billy_right_3.png
+        
+        for (let i = 1; i <= frameCount; i++) {
+            // Frame per destra
+            const rightFrame = new Image();
+            rightFrame.src = `img/player_frames/billy_right_${i}.png`;
+            rightFrame.onload = imageLoaded;
+            rightFrame.onerror = () => imageError(`billy_right_${i}.png`);
+            playerFrames.right.push(rightFrame);
+            
+            // Frame per sinistra
+            const leftFrame = new Image();
+            leftFrame.src = `img/player_frames/billy_left_${i}.png`;
+            leftFrame.onload = imageLoaded;
+            leftFrame.onerror = () => imageError(`billy_left_${i}.png`);
+            playerFrames.left.push(leftFrame);
+            
+            totalImagesToLoad += 2; // Aggiungi 2 per ogni coppia di frame
+        }
+    }
+
+    // Carica i frame del boss
+    function loadBossFrames() {
+        const frameCount = 3; // bounty_R_1.png, bounty_R_2.png, bounty_R_3.png e versioni L
+        
+        for (let i = 1; i <= frameCount; i++) {
+            // Frame per destra
+            const rightFrame = new Image();
+            rightFrame.src = `img/boss_frames/bounty_R_${i}.png`;
+            rightFrame.onload = imageLoaded;
+            rightFrame.onerror = () => imageError(`bounty_R_${i}.png`);
+            bossFrames.right.push(rightFrame);
+            
+            // Frame per sinistra
+            const leftFrame = new Image();
+            leftFrame.src = `img/boss_frames/bounty_L_${i}.png`;
+            leftFrame.onload = imageLoaded;
+            leftFrame.onerror = () => imageError(`bounty_L_${i}.png`);
+            bossFrames.left.push(leftFrame);
+            
+            totalImagesToLoad += 2; // Aggiungi 2 per ogni coppia di frame
+        }
+    }
+    
+    // Inizia il caricamento
+    backgroundImage.onload = imageLoaded;
+    backgroundImage.onerror = () => imageError('background.jpg');
+    bubbleSprite.onload = imageLoaded;
+    bubbleSprite.onerror = () => imageError('bubble_1.png');
+    
+    // Carica i frame del player e del boss
+    loadPlayerFrames();
+    loadBossFrames();
+
+    const player = {
+        x: canvas.width / 2 - 40,
+        y: canvas.height / 2 - 40,
+        width: 80,
+        height: 80,
+        color: '#ff6600',
+        speed: 8,
+        clawSize: 15,
+        angle: 0,
+        vx: 0, 
+        vy: 0, 
+        friction: 0.95,
+        facingRight: true,
+        health: 100,
+        maxHealth: 100
+    };
+
+    let bullets = [];
+    let bubbles = [];
+
+    const keys = {
+        ArrowUp: false,
+        ArrowDown: false,
+        ArrowLeft: false,
+        ArrowRight: false,
+        KeyW: false,
+        KeyS: false,
+        KeyA: false,
+        KeyD: false,
+        Enter: false
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        player.angle = Math.atan2(mouseY - (player.y + player.height / 2), mouseX - (player.x + player.width / 2));
+        
+        // Cambia l'immagine in base alla direzione del mouse
+        const angleDeg = player.angle * 180 / Math.PI;
+        player.facingRight = (angleDeg >= -90 && angleDeg <= 90);
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!gameActive) return;
+        
+        if (e.button === 2) { // Tasto destro - carica la chela
+            startCharging();
+        } else if (e.button === 0) { // Tasto sinistro - spara
+            if (isCharging) {
+                shoot();
+            }
+        }
+    });
+
+    // Previeni il menu contestuale sul tasto destro
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+
+    function startCharging() {
+        if (isShooting) return; // Non puoi caricare mentre stai sparando
+        isCharging = true;
+        currentFrame = 0;
+        animationTimer = 0;
+        playCockingSound()
+    }
+
+    function shoot() {
+        if (!gameActive || isShooting) return;
+        
+        isCharging = false;
+        isShooting = true;
+        currentFrame = 2; // Inizia dall'ultimo frame (sparo)
+        animationTimer = 0;
+
+        const bulletSpeed = 15;
+        const startOffset = player.width / 2 + player.clawSize / 2;
+        const bulletX = player.x + player.width / 2 + startOffset * Math.cos(player.angle);
+        const bulletY = player.y + player.height / 2 + startOffset * Math.sin(player.angle);
+
+        bullets.push({
+            x: bulletX,
+            y: bulletY,
+            size: 15,
+            speedX: bulletSpeed * Math.cos(player.angle),
+            speedY: bulletSpeed * Math.sin(player.angle),
+            growth: 0.3
+        });
+
+        const recoilForce = 6; 
+        player.vx -= recoilForce * Math.cos(player.angle);
+        player.vy -= recoilForce * Math.sin(player.angle);
+        
+        playGunshotSound();
+    }
+
+    function updateAnimation() {
+        animationTimer++;
+        
+        if (isCharging && animationTimer >= ANIMATION_SPEED) {
+            // Animazione di caricamento (0 -> 1 -> 2)
+            if (currentFrame < 2) {
+                currentFrame++;
+            }
+            animationTimer = 0;
+        } else if (isShooting && animationTimer >= ANIMATION_SPEED) {
+            // Animazione di sparo (2 -> 1 -> 0)
+            if (currentFrame > 0) {
+                currentFrame--;
+            } else {
+                // Fine animazione di sparo
+                isShooting = false;
+            }
+            animationTimer = 0;
+        }
+    }
+
+    function getCurrentPlayerFrame() {
+        const frames = player.facingRight ? playerFrames.right : playerFrames.left;
+        return frames[currentFrame] || frames[0]; // Fallback al primo frame
+    }
+
+    function playGunshotSound() {
+        const sound = new Audio('sound/gunshot.mp3');
+        sound.volume = 0.3;
+        sound.play().catch(error => {
+            console.log('Errore nella riproduzione audio:', error);
+        });
+    }
+
+    function playCockingSound() {
+        const sound = new Audio('sound/cocking.mp3');
+        cockingSound.volume = 1;
+        cockingSound.play().catch(error => {
+            console.log('Errore nella riproduzione audio di cocking:', error);
+        });
+    }
+    
+    function playSonicPop() {
+        const sound = new Audio('sound/sonic_pop.mp3');
+        sound.volume = 1;
+        sound.play().catch(error => {
+            console.log('Errore nella riproduzione audio:', error);
+        });
+    }
+
+    function update() {
+        if (!gameActive && !deathAnimation.active) {
+            if (gameStarted) {
+                requestAnimationFrame(update);
+            }
+            return;
+        }
+
+        // Aggiorna animazione di morte se attiva
+        if (deathAnimation.active) {
+            updateDeathAnimation();
+            requestAnimationFrame(draw);
+            return;
+        }
+
+        // Aggiorna animazione
+        updateAnimation();
+        updateBossAI();
+        checkBossBulletHitsPlayer();
+        checkPlayerBulletHitsBoss();
+
+        if ((keys.KeyW || keys.ArrowUp) && player.y > 0) player.y -= player.speed;
+        if ((keys.KeyS || keys.ArrowDown) && player.y < canvas.height - player.height) player.y += player.speed;
+        if ((keys.KeyA || keys.ArrowLeft) && player.x > 0) player.x -= player.speed;
+        if ((keys.KeyD || keys.ArrowRight)) player.x += player.speed;
+        
+        player.x += player.vx;
+        player.y += player.vy;
+        player.vx *= player.friction;
+        player.vy *= player.friction;
+
+        if (Math.abs(player.vx) < 0.01) player.vx = 0;
+        if (Math.abs(player.vy) < 0.01) player.vy = 0;
+
+        if (player.x < 0) { player.x = 0; player.vx = 0; }
+        if (player.y < 0) { player.y = 0; player.vy = 0; }
+        if (player.x > canvas.width - player.width) { player.x = canvas.width - player.width; player.vx = 0; }
+        if (player.y > canvas.height - player.height) { player.y = canvas.height - player.height; player.vy = 0; }
+
+        bullets.forEach((bullet, index) => {
+            bullet.x += bullet.speedX;
+            bullet.y += bullet.speedY;
+            bullet.size += bullet.growth;
+            if (bullet.x < -100 || bullet.x > canvas.width + 100 || bullet.y < -100 || bullet.y > canvas.height + 100) {
+                bullets.splice(index, 1);
+            }
+        });
+
+        bubbles.forEach((bubble, index) => {
+            bubble.y -= bubble.speed;
+            bubble.life -= 0.02;
+            if (bubble.life <= 0) bubbles.splice(index, 1);
+        });
+
+        frames++;
+        requestAnimationFrame(draw);
+    }
+
+    function createExplosion(x, y) {
+        for (let i = 0; i < 5; i++) {
+            bubbles.push({
+                x: x + Math.random() * 20,
+                y: y + Math.random() * 20,
+                size: 10 + Math.random() * 10,
+                speed: Math.random() * 2,
+                life: 1
+            });
+        }
+        playSonicPop()
+    }
+
+    function draw() {
+        if (!gameActive && !deathAnimation.active) return;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Disegna il background
+        ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        
+        // Se c'è animazione di morte, disegna solo quella
+        if (deathAnimation.active) {
+            // Disegna l'entità viva
+            if (deathAnimation.target === 'player') {
+                drawBoss();
+            } else {
+                ctx.save();
+                ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+                ctx.rotate(player.angle);
+                const currentImage = getCurrentPlayerFrame();
+                ctx.drawImage(currentImage, -player.width / 2, -player.height / 2, player.width, player.height);
+                ctx.restore();
+                drawHealthBar(player.x, player.y - 15, player.width, player.health, player.maxHealth, '#00ff00');
+            }
+            
+            // Disegna l'entità che sta morendo
+            drawDeathAnimation();
+            
+            // Disegna comunque i proiettili e le bolle
+            bullets.forEach(bullet => {
+                ctx.drawImage(bubbleSprite, bullet.x - bullet.size/2, bullet.y - bullet.size/2, bullet.size, bullet.size);
+            });
+            bubbles.forEach(bubble => {
+                ctx.globalAlpha = bubble.life;
+                ctx.drawImage(bubbleSprite, bubble.x, bubble.y, bubble.size, bubble.size);
+                ctx.globalAlpha = 1;
+            });
+            
+            if (deathAnimation.active) {
+                requestAnimationFrame(update);
+            }
+            return;
+        }
+        
+        ctx.save();
+        ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+        ctx.rotate(player.angle);
+
+        const currentImage = getCurrentPlayerFrame();
+        ctx.drawImage(currentImage, -player.width / 2, -player.height / 2, player.width, player.height);
+        
+        ctx.restore();
+        
+        // Barra vita player
+        drawHealthBar(player.x, player.y - 15, player.width, player.health, player.maxHealth, '#00ff00');
+        
+        drawBoss();
+        
+        // Disegna i proiettili con la sprite della bolla
+        bullets.forEach(bullet => {
+            ctx.drawImage(bubbleSprite, bullet.x - bullet.size/2, bullet.y - bullet.size/2, bullet.size, bullet.size);
+        });
+
+        bubbles.forEach(bubble => {
+            ctx.globalAlpha = bubble.life;
+            ctx.drawImage(bubbleSprite, bubble.x, bubble.y, bubble.size, bubble.size);
+            ctx.globalAlpha = 1;
+        });
+
+        if (gameActive) {
+            requestAnimationFrame(update);
+        }
+    }
+    
+    
+    // Oggetto boss
+    const boss = {
+        x: 80,
+        y: 80,
+        width: 100, // Dimensioni aumentate per le nuove sprite
+        height: 100,
+        speed: 2.5,
+        vx: 0,
+        vy: 0,
+        friction: 0.95,
+        facingRight: true,
+        angle: 0,
+        isCharging: false,
+        isShooting: false,
+        chargeTimer: 0,
+        shootCooldown: 0,
+        alive: true,
+        currentFrame: 0,
+        animationTimer: 0,
+        health: 100,
+        maxHealth: 100
+    };
+
+    // Sparo boss
+    function bossShoot() {
+        if (!boss.alive) return;
+
+        boss.isCharging = false;
+        boss.isShooting = true;
+        boss.currentFrame = 2;
+        boss.animationTimer = 0;
+
+        // Spawn proiettile
+        const bulletSpeed = 15;
+        const startOffset = boss.width / 2 + 20;
+
+        const bulletX = boss.x + boss.width / 2 + startOffset * Math.cos(boss.angle);
+        const bulletY = boss.y + boss.height / 2 + startOffset * Math.sin(boss.angle);
+
+        bullets.push({
+            x: bulletX,
+            y: bulletY,
+            size: 20,
+            speedX: bulletSpeed * Math.cos(boss.angle),
+            speedY: bulletSpeed * Math.sin(boss.angle),
+            growth: 0.3,
+            fromBoss: true
+        });
+
+        // Rinculo
+        const recoilForce = 5;
+        boss.vx -= recoilForce * Math.cos(boss.angle);
+        boss.vy -= recoilForce * Math.sin(boss.angle);
+
+        playGunshotSound();
+    }
+
+    // Animazione boss
+    function updateBossAnimation() {
+        boss.animationTimer++;
+        
+        if (boss.isCharging && boss.animationTimer >= ANIMATION_SPEED) {
+            if (boss.currentFrame < 2) {
+                boss.currentFrame++;
+            }
+            boss.animationTimer = 0;
+        } else if (boss.isShooting && boss.animationTimer >= ANIMATION_SPEED) {
+            if (boss.currentFrame > 0) {
+                boss.currentFrame--;
+            } else {
+                boss.isShooting = false;
+            }
+            boss.animationTimer = 0;
+        }
+    }
+
+    // Boss AI principale
+    function updateBossAI() {
+        if (!boss.alive) return;
+
+        // Aggiorna animazione boss
+        updateBossAnimation();
+
+        // Mira intelligente: predittiva se il player si muove, diretta se è fermo
+        const playerSpeed = Math.hypot(player.vx, player.vy);
+        const isPlayerMoving = playerSpeed > 0.5;
+        
+        const targetX = isPlayerMoving ? player.x + player.vx * 8 : player.x;
+        const targetY = isPlayerMoving ? player.y + player.vy * 8 : player.y;
+
+        const bx = boss.x + boss.width / 2;
+        const by = boss.y + boss.height / 2;
+
+        const dx = (targetX + player.width / 2) - bx;
+        const dy = (targetY + player.height / 2) - by;
+
+        const angleToPlayer = Math.atan2(dy, dx);
+        boss.angle = angleToPlayer;
+
+        // Direzione sprite
+        const deg = boss.angle * 180 / Math.PI;
+        boss.facingRight = (deg >= -90 && deg <= 90);
+
+        // --- MOVIMENTO INTELLIGENTE DEL BOSS ---
+
+        const dist = Math.hypot(dx, dy);
+        const idealDistance = 380;   // distanza perfetta per sparare
+        const approachSpeed = boss.speed * 1.0;
+        const strafeSpeed   = boss.speed * 0.7;
+
+        // 1) Avvicinamento / Allontanamento
+        if (dist > idealDistance) {
+            // avvicinati
+            boss.vx += (dx / dist) * approachSpeed;
+            boss.vy += (dy / dist) * approachSpeed;
+        } 
+        else if (dist < idealDistance - 40) {
+            // allontanati un po'
+            boss.vx -= (dx / dist) * approachSpeed;
+            boss.vy -= (dy / dist) * approachSpeed;
+        }
+
+        // 2) Movimento orbitale (strafe laterale)
+        boss.vx += Math.cos(angleToPlayer + Math.PI / 2) * strafeSpeed;
+        boss.vy += Math.sin(angleToPlayer + Math.PI / 2) * strafeSpeed;
+
+        // --- ANTI-STUPIDITY: se finisce vicino ai bordi, rientra ---
+        const margin = 60;
+        if (boss.x < margin) boss.vx += 1;
+        if (boss.x > canvas.width - boss.width - margin) boss.vx -= 1;
+        if (boss.y < margin) boss.vy += 1;
+        if (boss.y > canvas.height - boss.height - margin) boss.vy -= 1;
+
+        // Applica movimento
+        boss.x += boss.vx;
+        boss.y += boss.vy;
+
+        // Attrito
+        boss.vx *= boss.friction;
+        boss.vy *= boss.friction;
+
+        // Limiti schermo (hard stops)
+        if (boss.x < 0) boss.x = 0;
+        if (boss.y < 0) boss.y = 0;
+        if (boss.x > canvas.width - boss.width) boss.x = canvas.width - boss.width;
+        if (boss.y > canvas.height - boss.height) boss.y = canvas.height - boss.height;
+
+        // --- LOGICA DI CARICAMENTO / SPARO ---
+        if (!boss.isCharging && !boss.isShooting && Math.random() < 0.025) {
+            boss.isCharging = true;
+            boss.chargeTimer = 8 + Math.random() * 8;
+            boss.currentFrame = 0;
+            boss.animationTimer = 0;
+            playCockingSound();
+        }
+
+        if (boss.isCharging) {
+            boss.chargeTimer--;
+            if (boss.chargeTimer <= 0) {
+                bossShoot();
+            }
+        }
+    }
+
+    // Collisione boss → player
+    function checkBossBulletHitsPlayer() {
+        bullets.forEach((b, i) => {
+            if (!b.fromBoss) return;
+
+            const dx = (player.x + player.width / 2) - b.x;
+            const dy = (player.y + player.height / 2) - b.y;
+
+            if (dx * dx + dy * dy < 40 * 40) {
+                player.health -= 20;
+                createExplosion(player.x, player.y);
+                bullets.splice(i, 1);
+                
+                if (player.health <= 0) {
+                    player.health = 0;
+                    startDeathAnimation('player');
+                }
+            }
+        });
+    }
+
+    // Collisione player → boss
+    function checkPlayerBulletHitsBoss() {
+        if (!boss.alive) return;
+
+        bullets.forEach((b, i) => {
+            if (b.fromBoss) return;
+
+            const dx = (boss.x + boss.width / 2) - b.x;
+            const dy = (boss.y + boss.height / 2) - b.y;
+
+            if (dx * dx + dy * dy < 40 * 40) {
+                boss.health -= 20;
+                createExplosion(boss.x, boss.y);
+                bullets.splice(i, 1);
+                
+                if (boss.health <= 0) {
+                    boss.health = 0;
+                    boss.alive = false;
+                    startDeathAnimation('boss');
+                }
+            }
+        });
+    }
+
+    // Disegno boss
+    function drawBoss() {
+        if (!boss.alive) return;
+
+        // Usa i frame del boss
+        const frames = boss.facingRight ? bossFrames.right : bossFrames.left;
+        const currentBossFrame = frames[boss.currentFrame] || frames[0];
+
+        ctx.save();
+        ctx.translate(boss.x + boss.width / 2, boss.y + boss.height / 2);
+        ctx.rotate(boss.angle);
+
+        ctx.drawImage(currentBossFrame, -boss.width / 2, -boss.height / 2, boss.width, boss.height);
+
+        ctx.restore();
+        
+        // Barra vita boss
+        drawHealthBar(boss.x, boss.y - 15, boss.width, boss.health, boss.maxHealth, '#ff3333');
+    }
+
+    // Funzione per disegnare barre vita
+    function drawHealthBar(x, y, width, health, maxHealth, color) {
+        const barHeight = 8;
+        const percentage = health / maxHealth;
+        
+        // Sfondo barra
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(x, y, width, barHeight);
+        
+        // Barra vita
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, width * percentage, barHeight);
+        
+        // Bordo
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, width, barHeight);
+    }
+
+    // Animazione di morte
+    let deathAnimation = {
+        active: false,
+        target: null,
+        rotation: 0,
+        fallSpeed: 0,
+        gravity: 0.3,
+        opacity: 1
+    };
+
+    function startDeathAnimation(target) {
+        gameActive = false;
+        deathAnimation.active = true;
+        deathAnimation.target = target;
+        deathAnimation.rotation = 0;
+        deathAnimation.fallSpeed = 0;
+        deathAnimation.opacity = 1;
+    }
+
+    function updateDeathAnimation() {
+        if (!deathAnimation.active) return;
+
+        const target = deathAnimation.target === 'player' ? player : boss;
+        
+        // Rotazione (capovolto)
+        deathAnimation.rotation += 0.05;
+        
+        // Caduta con gravità
+        deathAnimation.fallSpeed += deathAnimation.gravity;
+        target.y += deathAnimation.fallSpeed;
+        
+        // Fade out graduale
+        if (target.y > canvas.height - 100) {
+            deathAnimation.opacity -= 0.01;
+        }
+        
+        // Fine animazione
+        if (target.y > canvas.height + 100 || deathAnimation.opacity <= 0) {
+            deathAnimation.active = false;
+            setTimeout(() => {
+                if (deathAnimation.target === 'player') {
+                    showGameOverOverlay(false);
+                } else {
+                    showGameOverOverlay(true);
+                }
+            }, 500);
+        }
+    }
+
+    function drawDeathAnimation() {
+        if (!deathAnimation.active) return;
+
+        const target = deathAnimation.target === 'player' ? player : boss;
+        let frames;
+        
+        if (deathAnimation.target === 'player') {
+            frames = target.facingRight ? playerFrames.right : playerFrames.left;
+        } else {
+            frames = target.facingRight ? bossFrames.right : bossFrames.left;
+        }
+        
+        const currentImage = frames[0] || frames[0];
+
+        ctx.save();
+        ctx.globalAlpha = deathAnimation.opacity;
+        ctx.translate(target.x + target.width / 2, target.y + target.height / 2);
+        ctx.rotate(Math.PI + deathAnimation.rotation);
+        ctx.drawImage(currentImage, -target.width / 2, -target.height / 2, target.width, target.height);
+        ctx.restore();
+    }
+    
+    // Funzione per mostrare l'overlay di vittoria/sconfitta
+    function showGameOverOverlay(isWin) {
+        if (isWin) {
+            gameOverMessage.textContent = 'Win! You defeated the Bounty Killer Snapper!';
+            gameOverMessage.className = 'win';
+        } else {
+            gameOverMessage.textContent = 'Game Over! Bounty Killer Snapper has defeated you!';
+            gameOverMessage.className = 'lose';
+        }
+        
+        gameOverOverlay.style.display = 'flex';
+    }
+    
+    // Funzione nextLevel
+    function nextLevel() {
+        window.location.href = 'Billy the shrimp_2.html';
+    }
+  
+    update();
+</script>
+
+</body>
+</html>

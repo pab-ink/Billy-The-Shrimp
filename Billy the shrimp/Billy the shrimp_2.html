@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billy the shrimp</title>
+    <style>
+        @font-face {
+            font-family: 'Peralta';
+            src: url('font/peralta/peralta-regular.ttf') format('truetype');
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+            font-family: 'Peralta';
+            overflow: hidden;
+            color: white;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+            border: 4px solid #005f99;
+        }
+        canvas {
+            display: block;
+            background: transparent;
+            cursor: crosshair;
+        }
+        #gameContainer:hover {
+            cursor: default;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+        }
+        #startScreen {
+            position: absolute;
+            width: 800px;
+            height: 500px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: flex;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 0px;
+            border-radius: 0px;
+            font-family: 'Peralta', cursive;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ff6600;
+        }
+        #startScreen p {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        #gameOverScreen {
+            position: absolute;
+            width: 800px;
+            height: 500px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 0px;
+            border-radius: 0px;
+            font-family: 'Peralta', cursive;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #levelCompleteScreen {
+            position: absolute;
+            width: 800px;
+            height: 500px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 0px;
+            border-radius: 0px;
+            font-family: 'Peralta', cursive;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        button {
+            background-color: #ff6600;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            font-family: 'Peralta', cursive;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #ff8533;
+        }
+        #musicToggle {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid white;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #musicToggle:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        #gameOverScreen h1,
+        #gameOverScreen p,
+        #gameOverScreen button {
+            font-family: 'Peralta', cursive;
+        }
+    </style>
+    <link rel="stylesheet" href="font/peralta/peralta.css">
+</head>
+<body>
+
+<div id="gameContainer">
+    <div id="ui">
+        Level: <span id="level">2</span> | 
+        Enemies defeated: <span id="enemiesDefeated">0</span>/<span id="totalEnemies">30</span>
+    </div>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    
+    <div id="startScreen">
+        <h1>QUEST</h1>
+        <p>Defeat all the henchmen</p>
+        <p style="font-size: 18px; color: #ccc;">Press ENTER to start</p>
+    </div>
+    
+    <div id="gameOverScreen">
+        <h1>GAME OVER</h1>
+        <p>You've been captured! The road to becoming the fastest gunslinger of the seas is still long.</p>
+        <p>Enemies defeated: <span id="finalEnemiesDefeated">0</span></p>
+        <p>Level : <span id="finalLevel">2</span></p>
+        <button onclick="resetGame()">Try Again</button>
+    </div>
+    
+    <div id="levelCompleteScreen">
+        <h1>Done!</h1>
+        <p>Quest completed!</p>
+        <p>Next level: <span id="nextLevel">Deputy Triggers</span></p>
+        <button onclick="nextLevel()">Continue</button>
+    </div>
+    
+    <button id="musicToggle" onclick="toggleMusic()">🔇 Musica</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const levelEl = document.getElementById('level');
+    const enemiesDefeatedEl = document.getElementById('enemiesDefeated');
+    const totalEnemiesEl = document.getElementById('totalEnemies');
+    const finalEnemiesDefeatedEl = document.getElementById('finalEnemiesDefeated');
+    const finalLevelEl = document.getElementById('finalLevel');
+    const nextLevelEl = document.getElementById('nextLevel');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const levelCompleteScreen = document.getElementById('levelCompleteScreen');
+    const startScreen = document.getElementById('startScreen');
+    const musicToggle = document.getElementById('musicToggle');
+
+    let gameActive = false;
+    let gameStarted = false;
+    let level = 2;
+    let enemiesDefeated = 0;
+    let enemiesSpawned = 0;
+    let morayEelsSpawned = 0;
+    let maxEnemies = 20;
+    let maxMorayEels = 10;
+    let frames = 0;
+    let enemiesPerLevel = maxEnemies + maxMorayEels;
+
+    // Tema musicale di sottofondo
+    const backgroundMusic = new Audio('sound/main_theme.mp3');
+    backgroundMusic.loop = true;
+    backgroundMusic.volume = 0.5;
+    let musicPlaying = false;
+
+    // Caricamento immagini
+    const playerFrames = {
+        right: [],
+        left: []
+    };
+    
+    // Aggiungi l'immagine di background
+    const backgroundImage = new Image();
+    backgroundImage.src = 'img/background/seabed.png';
+    
+    // Caricamento sprite nemici
+    const enemySprites = [];
+    const numberOfFish = 5;
+    
+    // Caricamento sprite murena
+    const morayEelFrames = {
+        left: [],
+        right: []
+    };
+    
+    // Aggiungi l'immagine della bolla
+    const bubbleSprite = new Image();
+    bubbleSprite.src = 'img/bubbles/bubble_1.png';
+    
+    // Effetto sonoro dello sparo
+    const gunshotSound = new Audio('sound/gunshot.mp3');
+    // Effetto sono caricamento
+    const cockingSound = new Audio('sound/cocking.mp3');
+    // Variabili per l'animazione del player
+    let currentFrame = 0;
+    let isCharging = false;
+    let isShooting = false;
+    let animationTimer = 0;
+    const ANIMATION_SPEED = 1;
+    
+    // Variabili per l'animazione delle murene
+    let morayAnimationTimer = 0;
+    const MORAY_ANIMATION_SPEED = 10;
+    
+    let totalImagesToLoad = 2 + numberOfFish;
+    let imagesLoaded = 0;
+    
+    function imageLoaded() {
+        imagesLoaded++;
+        console.log('Immagini caricate:', imagesLoaded, '/', totalImagesToLoad);
+        if (imagesLoaded === totalImagesToLoad) {
+            console.log('Tutte le immagini caricate!');
+        }
+    }
+    
+    function imageError(src) {
+        console.error('Errore caricamento:', src);
+        imagesLoaded++;
+        if (imagesLoaded === totalImagesToLoad) {
+            console.log('Caricamento completato con errori');
+        }
+    }
+    
+    function startBackgroundMusic() {
+        if (!musicPlaying) {
+            backgroundMusic.play().catch(error => {
+                console.log('Errore nella riproduzione della musica:', error);
+                musicToggle.textContent = "🔇 Clicca per musica";
+            });
+            musicPlaying = true;
+            musicToggle.textContent = "🔊 Musica";
+        }
+    }
+    
+    function stopBackgroundMusic() {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0;
+        musicPlaying = false;
+        musicToggle.textContent = "🔇 Musica";
+    }
+    
+    function toggleMusic() {
+        if (musicPlaying) {
+            stopBackgroundMusic();
+        } else {
+            startBackgroundMusic();
+        }
+    }
+    
+    // Carica i frame del player
+    function loadPlayerFrames() {
+        const frameCount = 3;
+        
+        for (let i = 1; i <= frameCount; i++) {
+            // Frame per destra
+            const rightFrame = new Image();
+            rightFrame.src = `img/player_frames/billy_right_${i}.png`;
+            rightFrame.onload = imageLoaded;
+            rightFrame.onerror = () => imageError(`billy_right_${i}.png`);
+            playerFrames.right.push(rightFrame);
+            
+            // Frame per sinistra
+            const leftFrame = new Image();
+            leftFrame.src = `img/player_frames/billy_left_${i}.png`;
+            leftFrame.onload = imageLoaded;
+            leftFrame.onerror = () => imageError(`billy_left_${i}.png`);
+            playerFrames.left.push(leftFrame);
+            
+            totalImagesToLoad += 2;
+        }
+    }
+    
+    // Carica i frame della murena
+    function loadMorayEelFrames() {
+        for (let i = 1; i <= 2; i++) {
+            // Frame per sinistra (verso destra)
+            const frameL = new Image();
+            frameL.src = `img/enemy/enemy_frames/moray_eel_${i}_L.png`;
+            frameL.onload = imageLoaded;
+            frameL.onerror = () => imageError(`moray_eel_${i}_L.png`);
+            morayEelFrames.left.push(frameL);
+            
+            // Frame per destra (verso sinistra)
+            const frameR = new Image();
+            frameR.src = `img/enemy/enemy_frames/moray_eel_${i}_R.png`;
+            frameR.onload = imageLoaded;
+            frameR.onerror = () => imageError(`moray_eel_${i}_R.png`);
+            morayEelFrames.right.push(frameR);
+            
+            totalImagesToLoad += 2;
+        }
+    }
+    
+    // Inizia il caricamento
+    backgroundImage.onload = imageLoaded;
+    backgroundImage.onerror = () => imageError('background.jpg');
+    bubbleSprite.onload = imageLoaded;
+    bubbleSprite.onerror = () => imageError('bubble_1.png');
+    
+    for (let i = 1; i <= numberOfFish; i++) {
+        const img = new Image();
+        img.src = `img/enemy/fish_${i}.png`;
+        img.onload = imageLoaded;
+        img.onerror = () => imageError(`fish_${i}.png`);
+        enemySprites.push(img);
+    }
+    
+    // Carica i frame del player
+    loadPlayerFrames();
+    // Carica i frame della murena
+    loadMorayEelFrames();
+
+    const player = {
+        x: canvas.width / 2 - 40,
+        y: canvas.height / 2 - 40,
+        width: 80,
+        height: 80,
+        color: '#ff6600',
+        speed: 5,
+        clawSize: 15,
+        angle: 0,
+        vx: 0, 
+        vy: 0, 
+        friction: 0.95,
+        facingRight: true
+    };
+
+    let bullets = [];
+    let enemies = [];
+    let morayEels = [];
+    let bubbles = [];
+
+    const keys = {
+        ArrowUp: false,
+        ArrowDown: false,
+        ArrowLeft: false,
+        ArrowRight: false,
+        KeyW: false,
+        KeyS: false,
+        KeyA: false,
+        KeyD: false,
+        Enter: false
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+        
+        if (e.code === 'Enter' && !gameStarted) {
+            startGame();
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        player.angle = Math.atan2(mouseY - (player.y + player.height / 2), mouseX - (player.x + player.width / 2));
+        
+        const angleDeg = player.angle * 180 / Math.PI;
+        player.facingRight = (angleDeg >= -90 && angleDeg <= 90);
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!gameActive) return;
+        
+        if (e.button === 2) {
+            startCharging();
+        } else if (e.button === 0) {
+            if (isCharging) {
+                shoot();
+            }
+        }
+    });
+
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+
+    function startGame() {
+        gameStarted = true;
+        gameActive = true;
+        startScreen.style.display = 'none';
+        playCockingSound();
+        startBackgroundMusic();
+        update();
+    }
+
+    function startCharging() {
+        if (isShooting) return;
+        isCharging = true;
+        currentFrame = 0;
+        animationTimer = 0;
+        playCockingSound()
+    }
+
+    function shoot() {
+        if (!gameActive || isShooting) return;
+        
+        isCharging = false;
+        isShooting = true;
+        currentFrame = 2;
+        animationTimer = 0;
+
+        const bulletSpeed = 10;
+        const startOffset = player.width / 2 + player.clawSize / 2;
+        const bulletX = player.x + player.width / 2 + startOffset * Math.cos(player.angle);
+        const bulletY = player.y + player.height / 2 + startOffset * Math.sin(player.angle);
+
+        bullets.push({
+            x: bulletX,
+            y: bulletY,
+            size: 10,
+            speedX: bulletSpeed * Math.cos(player.angle),
+            speedY: bulletSpeed * Math.sin(player.angle),
+            growth: 0.3
+        });
+
+        const recoilForce = 6; 
+        player.vx -= recoilForce * Math.cos(player.angle);
+        player.vy -= recoilForce * Math.sin(player.angle);
+        
+        playGunshotSound();
+    }
+
+    function updateAnimation() {
+        animationTimer++;
+        
+        if (isCharging && animationTimer >= ANIMATION_SPEED) {
+            if (currentFrame < 2) {
+                currentFrame++;
+            }
+            animationTimer = 0;
+        } else if (isShooting && animationTimer >= ANIMATION_SPEED) {
+            if (currentFrame > 0) {
+                currentFrame--;
+            } else {
+                isShooting = false;
+            }
+            animationTimer = 0;
+        }
+    }
+
+    function updateMorayAnimation() {
+        morayAnimationTimer++;
+        if (morayAnimationTimer >= MORAY_ANIMATION_SPEED) {
+            morayAnimationTimer = 0;
+        }
+    }
+
+    function getCurrentPlayerFrame() {
+        const frames = player.facingRight ? playerFrames.right : playerFrames.left;
+        return frames[currentFrame] || frames[0];
+    }
+
+    function getCurrentMorayFrame(moray) {
+        const isMovingRight = Math.cos(moray.angle) > 0;
+        const frames = isMovingRight ? morayEelFrames.left : morayEelFrames.right;
+        return frames[morayAnimationTimer < MORAY_ANIMATION_SPEED / 2 ? 0 : 1];
+    }
+
+    function playGunshotSound() {
+        const sound = new Audio('sound/gunshot.mp3');
+        sound.volume = 0.3;
+        sound.play().catch(error => {
+            console.log('Errore nella riproduzione audio:', error);
+        });
+    }
+
+    function playCockingSound() {
+        const sound = new Audio('sound/cocking.mp3');
+        cockingSound.volume = 1;
+        cockingSound.play().catch(error => {
+            console.log('Errore nella riproduzione audio di cocking:', error);
+        });
+    }
+    
+    function playSonicPop() {
+        const sound = new Audio('sound/sonic_pop.mp3');
+        sound.volume = 1;
+        sound.play().catch(error => {
+            console.log('Errore nella riproduzione audio:', error);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+
+        updateAnimation();
+        updateMorayAnimation();
+
+        if ((keys.KeyW || keys.ArrowUp) && player.y > 0) player.y -= player.speed;
+        if ((keys.KeyS || keys.ArrowDown) && player.y < canvas.height - player.height) player.y += player.speed;
+        if ((keys.KeyA || keys.ArrowLeft) && player.x > 0) player.x -= player.speed;
+        if ((keys.KeyD || keys.ArrowRight)) player.x += player.speed;
+
+        player.x += player.vx;
+        player.y += player.vy;
+        player.vx *= player.friction;
+        player.vy *= player.friction;
+
+        if (Math.abs(player.vx) < 0.01) player.vx = 0;
+        if (Math.abs(player.vy) < 0.01) player.vy = 0;
+
+        if (player.x < 0) { player.x = 0; player.vx = 0; }
+        if (player.y < 0) { player.y = 0; player.vy = 0; }
+        if (player.x > canvas.width - player.width) { player.x = canvas.width - player.width; player.vx = 0; }
+        if (player.y > canvas.height - player.height) { player.y = canvas.height - player.height; player.vy = 0; }
+
+        bullets.forEach((bullet, index) => {
+            bullet.x += bullet.speedX;
+            bullet.y += bullet.speedY;
+            bullet.size += bullet.growth;
+            if (bullet.x < -100 || bullet.x > canvas.width + 100 || bullet.y < -100 || bullet.y > canvas.height + 100) {
+                bullets.splice(index, 1);
+            }
+        });
+
+        // Spawna nemici fish normali
+        if (frames % 60 === 0 && enemies.length < getMaxEnemies() && enemiesSpawned < maxEnemies) {
+            const fromLeft = Math.random() > 0.5;
+            
+            let spawnY;
+            
+            if (Math.random() < 0.3) {
+                spawnY = player.y + (Math.random() * 60 - 30);
+            } else {
+                spawnY = Math.random() * (canvas.height - 100);
+            }
+            
+            spawnY = Math.max(20, Math.min(canvas.height - 100, spawnY));
+            
+            enemies.push({
+                x: fromLeft ? -80 : canvas.width,
+                y: spawnY,
+                width: 80,
+                height: 80,
+                speed: getEnemySpeed(),
+                sprite: enemySprites[Math.floor(Math.random() * enemySprites.length)],
+                fromLeft: fromLeft
+            });
+            
+            enemiesSpawned++;
+        }
+
+        // Spawna murene
+        if (frames % 120 === 0 && morayEels.length < getMaxMorayEels() && morayEelsSpawned < maxMorayEels) {
+            spawnMorayEel();
+            morayEelsSpawned++;
+        }
+
+        // Aggiorna nemici fish
+        enemies.forEach((enemy, eIndex) => {
+            if (enemy.fromLeft) {
+                enemy.x += enemy.speed;
+            } else {
+                enemy.x -= enemy.speed;
+            }
+
+            bullets.forEach((bullet, bIndex) => {
+                const dist = Math.hypot(bullet.x - (enemy.x + enemy.width/2), bullet.y - (enemy.y + enemy.height/2));
+                if (dist < bullet.size + enemy.width/4) {
+                    createExplosion(enemy.x, enemy.y);
+                    enemies.splice(eIndex, 1);
+                    bullets.splice(bIndex, 1);
+                    enemiesDefeated++;
+                    enemiesDefeatedEl.innerText = enemiesDefeated;
+                    
+                    if (enemiesDefeated >= enemiesPerLevel) {
+                        completeLevel();
+                    }
+                }
+            });
+
+            const hitboxReduction = 0.8;
+            const playerHitboxWidth = player.width * (1 - hitboxReduction);
+            const playerHitboxHeight = player.height * (1 - hitboxReduction);
+            const playerHitboxX = player.x + (player.width - playerHitboxWidth) / 2;
+            const playerHitboxY = player.y + (player.height - playerHitboxHeight) / 2;
+
+            if (
+                playerHitboxX < enemy.x + enemy.width &&
+                playerHitboxX + playerHitboxWidth > enemy.x &&
+                playerHitboxY < enemy.y + enemy.height &&
+                playerHitboxY + playerHitboxHeight > enemy.y
+            ) {
+                endGame();
+            }
+
+            if ((enemy.fromLeft && enemy.x > canvas.width) || (!enemy.fromLeft && enemy.x + enemy.width < 0)) {
+                enemies.splice(eIndex, 1);
+                enemiesSpawned = Math.max(0, enemiesSpawned - 1);
+            }
+        });
+
+        // Aggiorna murene
+        morayEels.forEach((moray, mIndex) => {
+            const angle = Math.atan2(
+                (player.y + player.height/2) - (moray.y + moray.height/2),
+                (player.x + player.width/2) - (moray.x + moray.width/2)
+            );
+            
+            moray.x += Math.cos(angle) * moray.speed;
+            moray.y += Math.sin(angle) * moray.speed;
+            moray.angle = angle;
+
+            bullets.forEach((bullet, bIndex) => {
+                const dist = Math.hypot(bullet.x - (moray.x + moray.width/2), bullet.y - (moray.y + moray.height/2));
+                if (dist < bullet.size + moray.width/4) {
+                    createExplosion(moray.x, moray.y);
+                    morayEels.splice(mIndex, 1);
+                    bullets.splice(bIndex, 1);
+                    enemiesDefeated++;
+                    enemiesDefeatedEl.innerText = enemiesDefeated;
+                    
+                    if (enemiesDefeated >= enemiesPerLevel) {
+                        completeLevel();
+                    }
+                }
+            });
+
+            const hitboxReduction = 0.8;
+            const playerHitboxWidth = player.width * (1 - hitboxReduction);
+            const playerHitboxHeight = player.height * (1 - hitboxReduction);
+            const playerHitboxX = player.x + (player.width - playerHitboxWidth) / 2;
+            const playerHitboxY = player.y + (player.height - playerHitboxHeight) / 2;
+
+            if (
+                playerHitboxX < moray.x + moray.width &&
+                playerHitboxX + playerHitboxWidth > moray.x &&
+                playerHitboxY < moray.y + moray.height &&
+                playerHitboxY + playerHitboxHeight > moray.y
+            ) {
+                endGame();
+            }
+
+            if (moray.x < -100 || moray.x > canvas.width + 100 || moray.y < -100 || moray.y > canvas.height + 100) {
+                morayEels.splice(mIndex, 1);
+                morayEelsSpawned = Math.max(0, morayEelsSpawned - 1);
+            }
+        });
+
+        bubbles.forEach((bubble, index) => {
+            bubble.y -= bubble.speed;
+            bubble.life -= 0.02;
+            if (bubble.life <= 0) bubbles.splice(index, 1);
+        });
+
+        frames++;
+        requestAnimationFrame(draw);
+    }
+
+    function spawnMorayEel() {
+        const side = Math.floor(Math.random() * 4);
+        
+        let x, y;
+        
+        switch(side) {
+            case 0:
+                x = Math.random() * canvas.width;
+                y = -80;
+                break;
+            case 1:
+                x = canvas.width + 80;
+                y = Math.random() * canvas.height;
+                break;
+            case 2:
+                x = Math.random() * canvas.width;
+                y = canvas.height + 80;
+                break;
+            case 3:
+                x = -80;
+                y = Math.random() * canvas.height;
+                break;
+        }
+        
+        morayEels.push({
+            x: x,
+            y: y,
+            width: 160,
+            height: 35,
+            speed: getMoraySpeed(),
+            angle: 0,
+            type: 'moray'
+        });
+    }
+
+    function getMaxEnemies() {
+        return 5 + Math.floor(level / 2);
+    }
+
+    function getMaxMorayEels() {
+        return Math.min(3, Math.floor(level / 2) + 1);
+    }
+
+    function getEnemySpeed() {
+        return 3 + Math.random() * 2 + (level * 0.2);
+    }
+
+    function getMoraySpeed() {
+        return 2 + Math.random() * 1 + (level * 0.15);
+    }
+
+    function createExplosion(x, y) {
+        for (let i = 0; i < 5; i++) {
+            bubbles.push({
+                x: x + Math.random() * 20,
+                y: y + Math.random() * 20,
+                size: 10 + Math.random() * 10,
+                speed: Math.random() * 2,
+                life: 1
+            });
+        }
+        playSonicPop()
+    }
+
+    function draw() {
+        if (!gameActive) return;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+        ctx.rotate(player.angle);
+
+        const currentImage = getCurrentPlayerFrame();
+        ctx.drawImage(currentImage, -player.width / 2, -player.height / 2, player.width, player.height);
+        
+        ctx.restore();
+        
+        bullets.forEach(bullet => {
+            ctx.drawImage(bubbleSprite, bullet.x - bullet.size/2, bullet.y - bullet.size/2, bullet.size, bullet.size);
+        });
+
+        enemies.forEach(enemy => {
+            if (enemy.fromLeft) {
+                ctx.save();
+                ctx.translate(enemy.x + enemy.width, enemy.y);
+                ctx.scale(-1, 1);
+                ctx.drawImage(enemy.sprite, 0, 0, enemy.width, enemy.height);
+                ctx.restore();
+            } else {
+                ctx.drawImage(enemy.sprite, enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+        });
+
+        morayEels.forEach(moray => {
+            ctx.save();
+            ctx.translate(moray.x + moray.width / 2, moray.y + moray.height / 2);
+            ctx.rotate(moray.angle);
+
+            ctx.drawImage(
+                getCurrentMorayFrame(moray),
+                -moray.width / 2,
+                -moray.height / 2,
+                moray.width,
+                moray.height
+            );
+
+            ctx.restore();
+        });
+        
+        bubbles.forEach(bubble => {
+            ctx.globalAlpha = bubble.life;
+            ctx.drawImage(bubbleSprite, bubble.x, bubble.y, bubble.size, bubble.size);
+            ctx.globalAlpha = 1;
+        });
+
+        if (gameActive) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    function completeLevel() {
+        gameActive = false;
+        stopBackgroundMusic();
+        nextLevelEl.innerText = 'Deputy Triggers';
+        levelCompleteScreen.style.display = 'flex';
+    }
+
+    function nextLevel() {
+        window.location.href = 'Billy the shrimp_boss_fight_2.html';
+    }
+
+    function endGame() {
+        gameActive = false;
+        stopBackgroundMusic();
+        finalEnemiesDefeatedEl.innerText = enemiesDefeated;
+        finalLevelEl.innerText = level;
+        gameOverScreen.style.display = 'flex';
+    }
+
+    function resetGame() {
+        level = 2;
+        enemiesDefeated = 0;
+        enemiesSpawned = 0;
+        morayEelsSpawned = 0;
+        frames = 0;
+        levelEl.innerText = '2';
+        enemiesDefeatedEl.innerText = '0';
+        totalEnemiesEl.innerText = enemiesPerLevel;
+        player.x = canvas.width / 2 - 40;
+        player.y = canvas.height / 2 - 40;
+        player.angle = 0;
+        player.vx = 0; 
+        player.vy = 0;
+        player.facingRight = true;
+        bullets = [];
+        enemies = [];
+        morayEels = [];
+        bubbles = [];
+        currentFrame = 0;
+        isCharging = false;
+        isShooting = false;
+        animationTimer = 0;
+        morayAnimationTimer = 0;
+        gameActive = true;
+        gameStarted = true;
+        gameOverScreen.style.display = 'none';
+        levelCompleteScreen.style.display = 'none';
+        startScreen.style.display = 'none';
+        startBackgroundMusic();
+        update();
+    }
+</script>
+
+</body>
+</html>
